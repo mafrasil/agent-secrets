@@ -11,13 +11,23 @@ Secrets are managed by `secretctl` (on your PATH). You never see a secret value:
 
 - **Never ask the user to paste a secret into the chat**, and never accept one there. If they try, point them to `secretctl set NAME`.
 - Never print, echo, log, decode or write a secret value to a file. Never try to read the vault, `/proc/*/environ`, or the env of a `secretctl run` process. A hook blocks this and redacts stored values from tool output as `[secret:NAME]`.
-- Name secrets in `UPPER_SNAKE_CASE`, specific to the project when useful: `AMY_STRIPE_SECRET_KEY`, `OPENAI_API_KEY`.
+- Name secrets in `UPPER_SNAKE_CASE` after what the provider calls them: `STRIPE_SECRET_KEY`, `CLOUDFLARE_API_TOKEN`. Don't add a project prefix, because scopes keep projects apart.
+
+## Scopes
+
+Every secret belongs to a **project** or is **global**.
+
+- **Project:** the git repo you're in, the same for every worktree and subfolder, or the nearest folder holding a `.secretctl` file. This is the default for `request`, `set` and `rm`. The user usually has a separate key per project, so keep it that way.
+- **Global:** shared by every project. Use `--global` only when the user says a key is the same everywhere (for example a personal `OPENAI_API_KEY`). Outside any project, everything is global.
+- `run` and `has` look in the project first, then fall back to global. A project key overrides a global key with the same name.
+- If `request` says a name is "not stored for project X, but a global … is", don't just carry on. Tell the user the shared key would be used and ask whether this project needs its own. If it does, run `secretctl request NAME --replace`. That stores a project key and leaves the global one alone.
+- `--project PATH` points any command at another project's scope.
 
 ## 1. Check what exists
 
 ```bash
-secretctl list                 # names only
-secretctl has STRIPE_SECRET_KEY
+secretctl list                 # this project's names, then global ones
+secretctl has STRIPE_SECRET_KEY   # says whether it resolves to the project or global
 ```
 
 ## 2. Request a missing secret
@@ -46,7 +56,7 @@ secretctl request --spec - <<'EOF'
 EOF
 ```
 
-`secretctl request A B C --why "…"` also works when the keys share one explanation. Names that are already stored are skipped automatically.
+`secretctl request A B C --why "…"` also works when the keys share one explanation. Names already stored for this project are skipped automatically. Names stored only globally are skipped too, with a note to check with the user (see Scopes). Add `--global` to request a shared key.
 
 The output has a one-time link and a terminal alternative. **Relay both to the user in your message, as written**, including the steps. Then block until everything arrives:
 
@@ -67,7 +77,7 @@ If the user says they already stored it, run `secretctl has NAME`. To replace a 
 secretctl run STRIPE_SECRET_KEY -- npm test
 
 # Map to the variable name the app expects: VAR=SECRET_NAME
-secretctl run STRIPE_SECRET=AMY_STRIPE_SECRET_KEY OPENAI_API_KEY -- php artisan app:sync
+secretctl run STRIPE_SECRET=STRIPE_SECRET_KEY OPENAI_API_KEY -- php artisan app:sync
 
 # Inline use: single quotes so the shell inside expands it, not you
 secretctl run GITHUB_TOKEN -- sh -c 'curl -sf -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/user | jq .login'

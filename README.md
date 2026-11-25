@@ -34,11 +34,22 @@ Install it on **every machine where Claude Code runs**: each VM, OrbStack machin
 | `hooks/guard.py` (PreToolUse) | Blocks any tool call that touches the vault folder or `/proc/*/environ` |
 | `hooks/guard.py` (PostToolUse) | Scans every tool result and replaces any stored value (raw, base64 or hex) with `[secret:NAME]` before the model sees it |
 | `hooks/guard.py` (UserPromptSubmit) | If you paste something that looks like a key (Stripe, OpenAI, Anthropic, GitHub, AWS, Slack, Polar, PEM and more), the message is stopped before it's sent |
-| `hooks/guard.py` (SessionStart) | Tells the agent which secret names exist, so it doesn't ask for them again |
+| `hooks/guard.py` (SessionStart) | Tells the agent the current project and which secret names exist there and globally, so it doesn't ask for them again |
+
+## Scopes
+
+Each secret belongs to a project, or is global.
+
+- **Project (the default).** The project is the git repo you're in: every subfolder and every `git worktree` of it counts as the same project. Each project has its own `CLOUDFLARE_API_TOKEN`, `STRIPE_SECRET_KEY` and so on, with no prefixes needed.
+- **Global (`--global`).** Shared by every project. Use it for keys that really are the same everywhere. Outside any git repo, everything is global.
+- **Lookup order.** `run` and `has` try the project first, then global. A project key overrides a global key with the same name, and `list` marks the global one as `[overridden by project]`.
+- **No silent sharing.** If you `request` a name that exists only globally, the agent is told to check with you. `--replace` then stores a project key and leaves the global one alone.
+- **Naming a scope yourself.** Put a `.secretctl` file containing `scope = acme-client` in a folder. Everything under it then shares that scope. Use it for a monorepo package, a folder that isn't a git repo, or to keep the same secrets when you move or re-clone a repo. A git-based scope is tied to the repo's path, so moving the repo leaves its secrets behind under the old path (`secretctl list --all` still shows them).
+- `--project PATH` points any command at another project, for example `secretctl set STRIPE_SECRET_KEY --project ~/Code/amy` from your home folder. The terminal command the agent gives you already includes it.
 
 ## Storage
 
-`~/.local/share/secretctl-vault/`, or `$XDG_DATA_HOME/secretctl-vault/`. The folder is `0700` and holds one `0600` file per secret, named by the SHA-256 of the secret's name. That's the same protection your `~/.ssh` keys get. It is not encrypted at rest. On a single-user dev box the encryption key would sit next to the data anyway. For real protection, use full-disk encryption, which you already have with LUKS in the VMs.
+`~/.local/share/secretctl-vault/`, or `$XDG_DATA_HOME/secretctl-vault/`. The folder is `0700` and holds one `0600` file per secret, named by the SHA-256 of the secret's name. Global secrets sit at the top level. Each project gets a `scopes/<hash>/` subfolder, with a `scope.meta` file recording which project it belongs to. That's the same protection your `~/.ssh` keys get. It is not encrypted at rest. On a single-user dev box the encryption key would sit next to the data anyway. For real protection, use full-disk encryption, which you already have with LUKS in the VMs.
 
 ## Entering values
 
@@ -64,7 +75,10 @@ secretctl request --spec JSON|@file|-        several keys, each with its own why
 secretctl wait NAME [NAME...] [--timeout S]  exit 0 all stored · 4 still waiting · 1 expired
 secretctl set NAME [NAME...]                 hidden prompt per key (Enter skips); or --file / --stdin for one
 secretctl run [VAR=]NAME ... -- command [args]
-secretctl list | has NAME... | rm NAME...
+secretctl list [--all] | has NAME... | rm NAME...
+
+request, wait, set, list, has and rm take --global or --project PATH (default: the current folder's project).
+run takes them before the names: secretctl run --global OPENAI_API_KEY -- cmd
 ```
 
 ## Limits

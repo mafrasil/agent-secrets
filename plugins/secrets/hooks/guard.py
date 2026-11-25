@@ -135,9 +135,18 @@ def session_start(ev: dict):
             os.symlink(src, link)
     except OSError:
         pass
-    names = [e.get("name") for e in store.all_entries() if e.get("name")]
+    scope = store.project_scope(ev.get("cwd") or None)
+
+    def names(s):
+        return ", ".join(e["name"] for e in store.entries(s) if e.get("name")) or "none"
+
     msg = ("Secrets are handled by `secretctl` (see the secret-keys skill). Never ask the user to paste a key in chat. ")
-    msg += ("Stored secret names: " + ", ".join(names) + "." if names else "No secrets stored yet.")
+    if scope.is_global:
+        msg += f"This folder is not in a project, so secrets here are global. Global secrets: {names(store.GLOBAL)}."
+    else:
+        msg += (f"Project scope: {scope.label} ({scope.root}). Secrets for this project: {names(scope)}. "
+                f"Global secrets (shared by every project, used when the project has no key of that name): "
+                f"{names(store.GLOBAL)}.")
     out({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": msg}})
 
 
