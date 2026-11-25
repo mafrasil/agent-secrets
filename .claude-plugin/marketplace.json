@@ -1,0 +1,17 @@
+{
+  "name": "mafrasil",
+  "owner": {
+    "name": "Tiago",
+    "url": "https://mafrasil.com"
+  },
+  "metadata": {
+    "description": "Tiago's Claude Code plugins"
+  },
+  "plugins": [
+    {
+      "name": "secrets",
+      "source": "./plugins/secrets",
+      "description": "Agents request API keys without the values entering the chat; secretctl runs commands with them injected and redacted."
+    }
+  ]
+}
